@@ -1,31 +1,41 @@
-# game/services/start.py
-
 from game.models import db, Court, Team
 import os
 from dotenv import load_dotenv
-from game import logger
+import logging
+
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 def verificar_o_poblar_datos():
-    logger.info("Este log viene desde el módulo game")
-    raw = os.getenv("CANCHAS")
-    if not raw:
-        print("⚠️ No se encontró la variable CANCHAS en el archivo .env.")
-        return
-    print(raw)
+    logger.info("Iniciando verificación/población de datos")
     
+    # Poblar canchas
     if not Court.query.first():
-        cancha = Court(name="Cancha Central")
-        db.session.add(cancha)
+        raw = os.getenv("CANCHAS", "").split(',')
+        if not raw or not raw[0]:
+            logger.error("⚠️ No se encontró la variable CANCHAS en el archivo .env.")
+            return
+        
+        for court in raw:
+            if court.strip():  # Verifica que no esté vacío
+                cancha = Court(name=court.strip())
+                db.session.add(cancha)
         db.session.commit()
-        print("✅ Se creó la cancha 'Cancha Central'.")
+        logger.info(f"✅ Se crearon {len(raw)} canchas")
+    else:
+        logger.info("Las canchas ya existen en la base de datos")
 
+    # Poblar equipos
     if not Team.query.first():
         cancha = Court.query.first()
+        if not cancha:
+            logger.error("No hay canchas disponibles para asignar equipos")
+            return
+            
         equipo_azul = Team(name="Equipo Azul", court_id=cancha.id)
         equipo_rojo = Team(name="Equipo Rojo", court_id=cancha.id)
         db.session.add_all([equipo_azul, equipo_rojo])
         db.session.commit()
-        print("✅ Se crearon los equipos Azul y Rojo.")
+        logger.info("✅ Se crearon los equipos Azul y Rojo")
     else:
-        print("✅ Ya existen registros de canchas y equipos.")
+        logger.info("Los equipos ya existen en la base de datos")
