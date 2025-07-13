@@ -1,3 +1,4 @@
+import code
 from game.models import db, Court, Team
 import os
 from dotenv import load_dotenv
@@ -17,8 +18,10 @@ def verificar_o_poblar_datos():
             return
         
         for court in raw:
+            nombre, codigo = court.split(';')
             if court.strip():  # Verifica que no esté vacío
-                cancha = Court(name=court.strip())
+                
+                cancha = Court(name=nombre.strip(), code=codigo.strip())
                 db.session.add(cancha)
         db.session.commit()
         logger.info(f"✅ Se crearon {len(raw)} canchas")

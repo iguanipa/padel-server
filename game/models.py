@@ -5,6 +5,7 @@ db = SQLAlchemy()
 class Court(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50))
+    code = db.Column(db.String(50))
 
 class Team(db.Model):
     id = db.Column(db.Integer, primary_key=True)
