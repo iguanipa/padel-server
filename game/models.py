@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
 
 db = SQLAlchemy()
 
@@ -17,17 +18,28 @@ class Player(db.Model):
     name = db.Column(db.String(50))
     team_id = db.Column(db.Integer, db.ForeignKey('team.id'))
 
-class Match(db.Model):
+class Point(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    team_id = db.Column(db.Integer, db.ForeignKey('team.id'))
     court_id = db.Column(db.Integer, db.ForeignKey('court.id'))
-    team_a_id = db.Column(db.Integer, db.ForeignKey('team.id'))
-    team_b_id = db.Column(db.Integer, db.ForeignKey('team.id'))
-    date = db.Column(db.DateTime)
+    signal_received = db.Column(db.Integer)  # puede ser +1 o -1
+    point_number = db.Column(db.Integer)
 
-class Set(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    match_id = db.Column(db.Integer, db.ForeignKey('match.id'))
-    number = db.Column(db.Integer)
-    points_team_a = db.Column(db.Integer)
-    points_team_b = db.Column(db.Integer)
+    # Estado textual del marcador estilo pádel (visual, no contador interno)
+    puntos_azul_padel = db.Column(db.String(20))
+    puntos_rojo_padel = db.Column(db.String(20))
+
+    # Estado acumulado del partido
+    juegos_azul = db.Column(db.Integer)
+    juegos_rojo = db.Column(db.Integer)
+    sets_azul = db.Column(db.Integer)
+    sets_rojo = db.Column(db.Integer)
+    set_actual = db.Column(db.Integer)
+    juego_actual = db.Column(db.Integer)
+    servicio = db.Column(db.String(50))
+    estado_partido = db.Column(db.String(50))
+
     active = db.Column(db.Boolean, default=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+
