@@ -1,9 +1,8 @@
 from . import game_bp  # Importar el blueprint local
 from flask import jsonify, request, render_template
-from .pointservice import PadelScoreManager, PointAction
+from .pointservice import PadelScoreManager
 from .models import db, Player
 from .sockets import  emitir_actualizacion  # Importa las utilidades
-
 
 @game_bp.route('/test')
 def status():
@@ -42,39 +41,38 @@ def crear_jugadores(cancha_id):
         return jsonify({"error": str(e)}), 500
 
 
+
+
 @game_bp.route("/cancha/<int:cancha_id>/punto", methods=["POST"])
 def manejar_punto(cancha_id):
     data = request.get_json()
     
-    if not data:
-        return jsonify({"error": "Datos requeridos"}), 400
+    if not data or 'team_id' not in data or 'signal' not in data:
+        return jsonify({"error": "Se requieren team_id y signal"}), 400
     
     try:
         manager = PadelScoreManager(cancha_id)
         
-        # Validación y conversión directa de signal a PointAction
-        if 'signal' not in data or data['signal'] not in [-1, 1]:
+        # Validar señal
+        signal = data['signal']
+        if signal not in [-1, 1]:
             return jsonify({"error": "Signal debe ser 1 (sumar) o -1 (restar)"}), 400
         
-        action = PointAction(data['signal'])  # Conversión directa
+        # Procesar señal
+        estado = manager.procesar_senal(
+            team_id=data['team_id'],
+            signal=signal
+        )
         
-        if action == PointAction.UNDO:
-            team_id = None
-        else:
-            if 'team_id' not in data:
-                return jsonify({"error": "team_id es requerido"}), 400
-            team_id = data['team_id']
-        
-        new_state = manager.process_action(team_id, action)
-        emitir_actualizacion(cancha_id, new_state)
+        emitir_actualizacion(cancha_id, estado)
         
         return jsonify({
             "success": True,
-            "state": new_state
+            "state": estado
         }), 200
         
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        print(f"Error: {str(e)}")
+        current_app.logger.error(f"Error: {str(e)}")
         return jsonify({"error": "Error interno del servidor"}), 500
