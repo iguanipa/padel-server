@@ -4,10 +4,14 @@ from game.models import db
 import logging
 from game.start import verificar_o_poblar_datos
 import os  # Añade esta línea
+from flask_socketio import SocketIO, emit
+from game.sockets import init_socketio  # Importa la función de inicialización
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///game.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+socketio = init_socketio(app)  # 👈 Aquí se configura
 
 db.init_app(app)
 
@@ -28,4 +32,4 @@ if __name__ == "__main__":
         
         db.create_all()
         verificar_o_poblar_datos()
-    app.run(debug=True)
+    socketio.run(app, debug=True, host='0.0.0.0')

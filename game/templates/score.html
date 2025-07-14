@@ -101,7 +101,7 @@
             <div
               class="text-9xl lg:text-[12rem] font-bold text-blue-400 mb-2 lg:mb-4 score-transition"
             >
-              [[ formatoPunto(puntos.azul) ]]
+              [[ puntos.azul ]]
             </div>
             <div class="text-gray-400 font-medium text-2xl lg:text-3xl">
               Juegos: [[ juegos.azul ]]
@@ -143,7 +143,7 @@
             <div
               class="text-9xl lg:text-[12rem] font-bold text-red-400 mb-2 lg:mb-4 score-transition"
             >
-              [[ formatoPunto(puntos.rojo) ]]
+              [[ puntos.rojo ]]
             </div>
             <div class="text-gray-400 font-medium text-2xl lg:text-3xl">
               Juegos: [[ juegos.rojo ]]
@@ -189,15 +189,12 @@
         },
 
         methods: {
-          formatoPunto(punto) {
-            const puntos = ["0", "15", "30", "40"];
-            return punto < 4 ? puntos[punto] : "AD";
-          },
-
           conectarWebSocket() {
-            this.socket = io();
-
+            this.socket = io("http://localhost:5000");
+            this.socket.emit("unirse_cancha", { cancha_id: 1 }); // 👈 Añade esta línea
             this.socket.on("actualizar_marcador", (data) => {
+              console.log("ingresando actualizar_marcador");
+              console.log(data);
               // Actualizar todos los datos del marcador
               this.puntos.azul = data.puntos.azul;
               this.puntos.rojo = data.puntos.rojo;
@@ -225,7 +222,6 @@
         mounted() {
           this.conectarWebSocket();
           // Inicializar con valores por defecto
-          this.resetearPuntos();
         },
       }).mount("#app");
     </script>
