@@ -20,36 +20,105 @@ class PadelScoreManager:
         self.blue_team, self.red_team = self._load_teams()
         self.current_state = self._load_current_state()
         self.notifications = []
+        self._validate_teams()
+    
+    def _validate_teams(self):
+        """Valida que los equipos estén correctamente configurados"""
+        if not self.blue_team or not self.red_team:
+            raise ValueError("Los equipos no están correctamente configurados para esta cancha")
+        
+        # Actualiza los nombres en el estado si no coinciden
+        if self.current_state['puntos'].get('azul') is None:
+            self.current_state['puntos']['azul'] = '0'
+        if self.current_state['puntos'].get('rojo') is None:
+            self.current_state['puntos']['rojo'] = '0'
 
     def _load_teams(self):
-        teams = Team.query.filter_by(court_id=self.court_id).all()
+        """Carga los equipos y valida su existencia"""
+        teams = Team.query.filter_by(court_id=self.court_id).order_by(Team.id).all()
+        
         if len(teams) != 2:
             raise ValueError("La cancha debe tener exactamente 2 equipos")
         
-        blue = next((t for t in teams if t.name.lower() == "azul"), teams[0])
-        red = next((t for t in teams if t.name.lower() == "rojo"), teams[1])
+        # Asignamos dinámicamente los equipos (azul siempre será el primero creado por convención)
+        blue = teams[0]
+        red = teams[1]
+        
+        # Opcional: puedes verificar nombres si lo prefieres
+        # blue = next((t for t in teams if t.name.lower() == "azul"), teams[0])
+        # red = next((t for t in teams if t.name.lower() == "rojo"), teams[1])
+        
         return blue, red
 
     def _load_current_state(self):
+        """Carga el estado actual incluyendo información de equipos"""
         last_point = Point.query.filter_by(
             court_id=self.court_id,
             active=True
         ).order_by(desc(Point.point_number)).first()
 
         if not last_point:
-            return {
-                'puntos': {'azul': '0', 'rojo': '0'},
-                'juegos': {'azul': 0, 'rojo': 0},
-                'sets': {'azul': 0, 'rojo': 0},
-                'set_actual': 1,
-                'juego_actual': 1,
-                'servicio': 'azul',
-                'estado_partido': 'En juego'
-            }
+            return self._create_initial_state()
+        
+        state = self._point_to_state(last_point)
+        return state
 
-        return self._point_to_state(last_point)
+    def _validate_teams(self):
+        """Valida que los equipos y sus jugadores estén correctamente configurados"""
+        if not self.blue_team or not self.red_team:
+            raise ValueError("Los equipos no están correctamente configurados para esta cancha")
+        
+        # Validar que ambos equipos tengan jugadores
+        try:
+            blue_players = self._get_team_players(self.blue_team.id)
+            red_players = self._get_team_players(self.red_team.id)
+        except ValueError as e:
+            current_app.logger.error(f"Error validando jugadores: {str(e)}")
+            raise ValueError("No se puede iniciar el partido: " + str(e))
+        
+        # Actualiza los nombres en el estado si no coinciden
+        if self.current_state['puntos'].get('azul') is None:
+            self.current_state['puntos']['azul'] = '0'
+        if self.current_state['puntos'].get('rojo') is None:
+            self.current_state['puntos']['rojo'] = '0'
+
+    def _get_team_players(self, team_id):
+        """Obtiene los jugadores de un equipo desde la base de datos"""
+        from game.models import Player  # Importamos aquí para evitar circular imports
+        
+        players = Player.query.filter_by(team_id=team_id).all()
+        
+        if not players:
+            raise ValueError(f"No hay jugadores registrados para el equipo con ID {team_id}")
+        
+        return [player.name for player in players]
+
+    def _create_initial_state(self):
+        """Crea el estado inicial con información de equipos"""
+        return {
+            'puntos': {'azul': '0', 'rojo': '0'},
+            'juegos': {'azul': 0, 'rojo': 0},
+            'sets': {'azul': 0, 'rojo': 0},
+            'set_actual': 1,
+            'juego_actual': 1,
+            'servicio': 'azul',
+            'estado_partido': 'En juego',
+            'teams': {
+                'azul': {
+                    'id': self.blue_team.id,
+                    'name': self.blue_team.name,
+                    'players': self._get_team_players(self.blue_team.id)
+                },
+                'rojo': {
+                    'id': self.red_team.id,
+                    'name': self.red_team.name,
+                    'players': self._get_team_players(self.red_team.id)
+                }
+            }
+        }
 
     def _point_to_state(self, point):
+        """Convierte un punto a estado incluyendo información de equipos"""
         state = {
             'puntos': {
                 'azul': point.puntos_azul_padel,
@@ -66,7 +135,19 @@ class PadelScoreManager:
             'set_actual': point.set_actual,
             'juego_actual': point.juego_actual,
             'servicio': point.servicio,
-            'estado_partido': point.estado_partido
+            'estado_partido': point.estado_partido,
+            'teams': {
+                'azul': {
+                    'id': self.blue_team.id,
+                    'name': self.blue_team.name,
+                    'players': self._get_team_players(self.blue_team.id)
+                },
+                'rojo': {
+                    'id': self.red_team.id,
+                    'name': self.red_team.name,
+                    'players': self._get_team_players(self.red_team.id)
+                }
+            }
         }
         
         if hasattr(point, 'notifications'):
@@ -76,13 +157,24 @@ class PadelScoreManager:
 
     def procesar_senal(self, team_id, signal):
         """Método principal para sumar/restar puntos"""
-        if signal not in [-1, 1]:
-            raise ValueError("Señal inválida. Debe ser 1 (sumar) o -1 (restar)")
+        try:
+            # Validar equipos y jugadores antes de procesar
+            self._validate_teams()
+            
+            if signal not in [-1, 1]:
+                raise ValueError("Señal inválida. Debe ser 1 (sumar) o -1 (restar)")
 
-        if signal == -1:
-            return self._handle_subtract_point(team_id)
-        else:
-            return self._handle_add_point(team_id)
+            if signal == -1:
+                return self._handle_subtract_point(team_id)
+            else:
+                return self._handle_add_point(team_id)
+                
+        except ValueError as e:
+            current_app.logger.error(f"Error procesando señal: {str(e)}")
+            # Devolver el estado actual con el error
+            state = self._get_full_state()
+            state['error'] = str(e)
+            return state
 
     def _handle_add_point(self, team_id):
         """Maneja la adición de un punto"""
@@ -256,8 +348,26 @@ class PadelScoreManager:
         ).update({'active': False})
 
     def _get_full_state(self):
+        """Devuelve el estado completo con información de equipos"""
         state = self.current_state.copy()
+        
+        # Asegurarse de que la información de equipos está incluida
+        if 'teams' not in state:
+            state['teams'] = {
+                'azul': {
+                    'id': self.blue_team.id,
+                    'name': self.blue_team.name,
+                    'players': self._get_team_players(self.blue_team.id)
+                },
+                'rojo': {
+                    'id': self.red_team.id,
+                    'name': self.red_team.name,
+                    'players': self._get_team_players(self.red_team.id)
+                }
+            }
+        
         if self.notifications:
             state['notifications'] = [n for n in self.notifications]
             self.notifications = []
+        
         return state
