@@ -34,21 +34,28 @@ class PadelScoreManager:
             self.current_state['puntos']['rojo'] = '0'
 
     def _load_teams(self):
-        """Carga los equipos y valida su existencia"""
+        """Carga los equipos y valida su existencia, con creación automática si no existen"""
         teams = Team.query.filter_by(court_id=self.court_id).order_by(Team.id).all()
+        
+        # Si no hay equipos, crearlos automáticamente
+        if len(teams) == 0:
+            from .admin_manager import AdminManager
+            manager = AdminManager(self.court_id)
+            result = manager.initialize_court(
+                {'name': 'Azul', 'players': ['Jugador Azul 1', 'Jugador Azul 2']},
+                {'name': 'Rojo', 'players': ['Jugador Rojo 1', 'Jugador Rojo 2']}
+            )
+            
+            if result['status'] != 'success':
+                raise ValueError("No se pudieron crear los equipos automáticamente")
+            
+            # Recargar los equipos después de crearlos
+            teams = Team.query.filter_by(court_id=self.court_id).order_by(Team.id).all()
         
         if len(teams) != 2:
             raise ValueError("La cancha debe tener exactamente 2 equipos")
         
-        # Asignamos dinámicamente los equipos (azul siempre será el primero creado por convención)
-        blue = teams[0]
-        red = teams[1]
-        
-        # Opcional: puedes verificar nombres si lo prefieres
-        # blue = next((t for t in teams if t.name.lower() == "azul"), teams[0])
-        # red = next((t for t in teams if t.name.lower() == "rojo"), teams[1])
-        
-        return blue, red
+        return teams[0], teams[1]
 
     def _load_current_state(self):
         """Carga el estado actual incluyendo información de equipos"""
@@ -62,6 +69,21 @@ class PadelScoreManager:
         
         state = self._point_to_state(last_point)
         return state
+    
+    def get_teams_info(self):
+        """Retorna información estructurada de los equipos"""
+        return {
+            'blue_team': {
+                'id': self.blue_team.id,
+                'name': self.blue_team.name,
+                'players': self._get_team_players(self.blue_team.id)
+            },
+            'red_team': {
+                'id': self.red_team.id,
+                'name': self.red_team.name,
+                'players': self._get_team_players(self.red_team.id)
+            }
+        }
 
     def _validate_teams(self):
         """Valida que los equipos y sus jugadores estén correctamente configurados"""
@@ -94,8 +116,8 @@ class PadelScoreManager:
         return [player.name for player in players]
 
     def _create_initial_state(self):
-        """Crea el estado inicial con información de equipos"""
-        return {
+        """Crea el estado inicial con información completa de equipos"""
+        state = {
             'puntos': {'azul': '0', 'rojo': '0'},
             'juegos': {'azul': 0, 'rojo': 0},
             'sets': {'azul': 0, 'rojo': 0},
@@ -103,19 +125,9 @@ class PadelScoreManager:
             'juego_actual': 1,
             'servicio': 'azul',
             'estado_partido': 'En juego',
-            'teams': {
-                'azul': {
-                    'id': self.blue_team.id,
-                    'name': self.blue_team.name,
-                    'players': self._get_team_players(self.blue_team.id)
-                },
-                'rojo': {
-                    'id': self.red_team.id,
-                    'name': self.red_team.name,
-                    'players': self._get_team_players(self.red_team.id)
-                }
-            }
+            'teams': self.get_teams_info()  # Usamos el método nuevo
         }
+        return state
 
     def _point_to_state(self, point):
         """Convierte un punto a estado incluyendo información de equipos"""
