@@ -8,10 +8,13 @@ class Court(db.Model):
     name = db.Column(db.String(50))
     code = db.Column(db.String(50))
 
+# models.py
 class Team(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50))  # Ej: “Azul” o “Rojo”
+    name = db.Column(db.String(50))
+    color = db.Column(db.String(10))  # 'azul' o 'rojo'
     court_id = db.Column(db.Integer, db.ForeignKey('court.id'))
+    players = db.relationship('Player', backref='team', lazy=True)
 
 class Player(db.Model):
     id = db.Column(db.Integer, primary_key=True)

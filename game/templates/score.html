@@ -41,10 +41,12 @@
         transition: all 0.3s ease;
       }
     </style>
+    <meta name="cancha-id" content="{{ cancha_id }}" />
+    <meta name="estado-inicial" content="{{ estado_inicial}}" />
   </head>
   <body class="bg-gray-900">
     <div id="app" class="h-screen w-screen flex flex-col">
-      <!-- Header minimalista -->
+      <!-- Header minimalista - Añadido nombre de equipos -->
       <div
         class="bg-black text-white py-2 px-4 flex justify-between items-center border-b border-gray-800"
       >
@@ -59,7 +61,7 @@
             :class="{'text-blue-400': servicio === 'azul', 'text-red-400': servicio === 'rojo'}"
             class="font-semibold text-sm"
           >
-            [[ servicio === 'azul' ? 'AZUL' : 'ROJO' ]]
+            [[ servicio === 'azul' ? teams.azul.name : teams.rojo.name ]]
           </span>
           <span
             v-if="servicio === 'azul'"
@@ -80,10 +82,15 @@
           :class="{'bg-blue-900/30': servicio === 'azul'}"
         >
           <div class="text-center mb-4 lg:mb-8">
+            <!-- Nombre del equipo dinámico -->
             <div
               class="text-blue-400 font-bold text-4xl lg:text-5xl mb-1 lg:mb-2"
             >
-              EQUIPO AZUL
+              [[ teams.azul.name ]]
+            </div>
+            <!-- Jugadores -->
+            <div class="text-gray-300 text-lg lg:text-xl mb-2">
+              [[ teams.azul.players.join(' & ') ]]
             </div>
             <div class="flex justify-center space-x-4">
               <div
@@ -122,10 +129,15 @@
           :class="{'bg-red-900/30': servicio === 'rojo'}"
         >
           <div class="text-center mb-4 lg:mb-8">
+            <!-- Nombre del equipo dinámico -->
             <div
               class="text-red-400 font-bold text-4xl lg:text-5xl mb-1 lg:mb-2"
             >
-              EQUIPO ROJO
+              [[ teams.rojo.name ]]
+            </div>
+            <!-- Jugadores -->
+            <div class="text-gray-300 text-lg lg:text-xl mb-2">
+              [[ teams.rojo.players.join(' & ') ]]
             </div>
             <div class="flex justify-center space-x-4">
               <div
@@ -168,18 +180,11 @@
 
         data() {
           return {
-            puntos: {
-              azul: 0,
-              rojo: 0,
-            },
-            juegos: {
-              azul: 0,
-              rojo: 0,
-            },
-            sets: {
-              azul: 0,
-              rojo: 0,
-            },
+            ...JSON.parse(
+              document
+                .querySelector("meta[name='estado-inicial']")
+                .getAttribute("content")
+            ),
             setActual: 1,
             juegoActual: 1,
             servicio: "azul",
@@ -191,21 +196,31 @@
         methods: {
           conectarWebSocket() {
             this.socket = io("http://localhost:5000");
-            this.socket.emit("unirse_cancha", { cancha_id: 1 }); // 👈 Añade esta línea
+            this.socket.emit("unirse_cancha", {
+              cancha_id: document.querySelector("meta[name='cancha-id']")
+                .content,
+            });
+
             this.socket.on("actualizar_marcador", (data) => {
-              console.log("ingresando actualizar_marcador");
-              console.log(data);
+              console.log("Nuevo estado recibido:", data);
+
               // Actualizar todos los datos del marcador
-              this.puntos.azul = data.puntos.azul;
-              this.puntos.rojo = data.puntos.rojo;
-              this.juegos.azul = data.juegos.azul;
-              this.juegos.rojo = data.juegos.rojo;
-              this.sets.azul = data.sets.azul;
-              this.sets.rojo = data.sets.rojo;
-              this.setActual = data.setActual;
-              this.juegoActual = data.juegoActual;
+              this.puntos = data.puntos;
+              this.juegos = data.juegos;
+              this.sets = data.sets;
+              this.teams = data.teams;
+              this.setActual = data.set_actual;
+              this.juegoActual = data.juego_actual;
               this.servicio = data.servicio;
-              this.estadoPartido = data.estadoPartido;
+              this.estadoPartido = data.estado_partido;
+
+              // Manejar notificaciones si existen
+              if (
+                data.state.notifications &&
+                data.state.notifications.length > 0
+              ) {
+                this.mostrarNotificaciones(data.state.notifications);
+              }
             });
 
             this.socket.on("connect", () => {
@@ -213,15 +228,39 @@
             });
           },
 
-          actualizarDesdeBackend(data) {
-            // Método para actualizar manualmente si es necesario
-            Object.assign(this.$data, data);
+          mostrarNotificaciones(notifications) {
+            notifications.forEach((notif) => {
+              let message = "";
+              let color = "";
+
+              if (notif.type === "game_won") {
+                message = `${this.teams[notif.team].name} gana el juego ${
+                  notif.games
+                }`;
+                color = notif.team === "azul" ? "blue" : "red";
+              } else if (notif.type === "set_won") {
+                message = `${this.teams[notif.team].name} gana el set ${
+                  notif.sets
+                }`;
+                color = notif.team === "azul" ? "blue" : "red";
+              } else if (notif.type === "match_won") {
+                message = `${this.teams[notif.team].name} gana el partido!`;
+                color = "emerald";
+              }
+
+              if (message) {
+                // Aquí podrías implementar un sistema de notificaciones visuales
+                console.log(
+                  `%c${message}`,
+                  `color: ${color}; font-weight: bold;`
+                );
+              }
+            });
           },
         },
 
         mounted() {
           this.conectarWebSocket();
-          // Inicializar con valores por defecto
         },
       }).mount("#app");
     </script>

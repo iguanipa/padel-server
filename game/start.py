@@ -28,17 +28,5 @@ def verificar_o_poblar_datos():
     else:
         logger.info("Las canchas ya existen en la base de datos")
 
-    # Poblar equipos
-    if not Team.query.first():
-        cancha = Court.query.first()
-        if not cancha:
-            logger.error("No hay canchas disponibles para asignar equipos")
-            return
-            
-        equipo_azul = Team(name="Equipo Azul", court_id=cancha.id)
-        equipo_rojo = Team(name="Equipo Rojo", court_id=cancha.id)
-        db.session.add_all([equipo_azul, equipo_rojo])
-        db.session.commit()
-        logger.info("✅ Se crearon los equipos Azul y Rojo")
-    else:
-        logger.info("Los equipos ya existen en la base de datos")
+
+    Team.query.delete()

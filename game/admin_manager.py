@@ -1,6 +1,16 @@
 # game/admin_manager.py
-from .models import db, Team, Player, Point
+from .models import db, Team, Player, Point, Court
 from datetime import datetime
+
+class AdminManagerSetting:
+    def _get_courts():
+        result =  Court.query.all()
+        data = [{
+        "id": cancha.id,
+        "name": cancha.name,
+        "code": cancha.code
+        } for cancha in result]
+        return data
 
 class AdminManager:
     def __init__(self, court_id=None):
@@ -59,7 +69,7 @@ class AdminManager:
                 'court_id': self.court_id
             }
 
-    def create_team(self, team_name, players=None):
+    def create_team(self, team_name, color,players=None):
         """
         Crea un nuevo equipo para la cancha
         :param team_name: Nombre del equipo (ej: "Azul")
@@ -73,6 +83,7 @@ class AdminManager:
             # Crear equipo
             new_team = Team(
                 name=team_name,
+                color=color,
                 court_id=self.court_id
             )
             db.session.add(new_team)
@@ -95,6 +106,7 @@ class AdminManager:
                 'status': 'success',
                 'team_id': new_team.id,
                 'team_name': team_name,
+                'color': color,
                 'players': created_players
             }
             
@@ -162,6 +174,7 @@ class AdminManager:
             # Crear equipo A
             team_a_result = self.create_team(
                 team_name=team_a_data['name'],
+                color=team_a_data['color'],
                 players=team_a_data.get('players', [])
             )
             results['teams'].append(team_a_result)
@@ -169,6 +182,7 @@ class AdminManager:
             # Crear equipo B
             team_b_result = self.create_team(
                 team_name=team_b_data['name'],
+                color=team_b_data['color'],
                 players=team_b_data.get('players', [])
             )
             results['teams'].append(team_b_result)

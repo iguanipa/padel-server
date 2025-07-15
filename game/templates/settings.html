@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Pádel - Gestión de Canchas</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+      .tab-active {
+        border-bottom: 3px solid #10b981;
+        font-weight: 600;
+      }
+      .notification {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 24px;
+        border-radius: 8px;
+        color: white;
+        z-index: 1000;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      .loading-spinner {
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top: 3px solid #fff;
+        width: 20px;
+        height: 20px;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 font-sans">
+    <div id="admin-app" class="min-h-screen">
+      <!-- Barra de navegación -->
+      <nav class="bg-gray-800 text-white p-4 shadow-md">
+        <div class="container mx-auto flex justify-between items-center">
+          <h1 class="text-2xl font-bold text-emerald-400">Admin Pádel</h1>
+          <div class="flex space-x-4">
+            <button
+              @click="activeTab = 'reset'"
+              :class="{'tab-active': activeTab === 'reset'}"
+              class="px-4 py-2 hover:bg-gray-700 rounded transition"
+            >
+              Resetear Cancha
+            </button>
+            <button
+              @click="activeTab = 'init'"
+              :class="{'tab-active': activeTab === 'init'}"
+              class="px-4 py-2 hover:bg-gray-700 rounded transition"
+            >
+              Inicializar Cancha
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Contenido principal -->
+      <main class="container mx-auto p-4">
+        <!-- Sección Resetear Cancha -->
+        <div
+          v-if="activeTab === 'reset'"
+          class="bg-white rounded-lg shadow-md p-6"
+        >
+          <h2 class="text-xl font-semibold mb-4 text-gray-800">
+            Resetear Cancha
+          </h2>
+
+          <div class="max-w-md mx-auto">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Seleccionar Cancha</label
+              >
+              <select
+                v-model="selectedCourt"
+                class="w-full p-2 border rounded"
+                :disabled="loadingCourts"
+              >
+                <option v-if="loadingCourts" value="" disabled>
+                  Cargando canchas...
+                </option>
+                <option v-else-if="courts.length === 0" value="" disabled>
+                  No hay canchas disponibles
+                </option>
+                <option v-else value="" disabled>Seleccione una cancha</option>
+                <option
+                  v-for="court in courts"
+                  :key="court.id"
+                  :value="court.id"
+                >
+                  Cancha #[[ court.id ]] - [[ court.name || 'Sin nombre' ]]
+                </option>
+              </select>
+            </div>
+
+            <div
+              v-if="selectedCourt"
+              class="bg-gray-50 p-4 rounded border mt-4"
+            >
+              <h3 class="font-medium mb-3 text-gray-700">Confirmar Reset</h3>
+              <p class="mb-3">
+                ¿Estás seguro de resetear la Cancha #[[ selectedCourt ]]?
+              </p>
+              <p class="text-sm text-red-600 mb-4">
+                ¡Esto eliminará todos los datos de la cancha!
+              </p>
+              <div class="flex space-x-3">
+                <button
+                  @click="resetCourt"
+                  class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center justify-center"
+                  :disabled="resetting"
+                >
+                  [[ resetting ? 'Reseteando...' : 'Confirmar Reset' ]]
+                  <span v-if="resetting" class="loading-spinner ml-2"></span>
+                </button>
+                <button
+                  @click="selectedCourt = ''"
+                  class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sección Inicializar Cancha -->
+        <div
+          v-if="activeTab === 'init'"
+          class="bg-white rounded-lg shadow-md p-6"
+        >
+          <h2 class="text-xl font-semibold mb-4 text-gray-800">
+            Inicializar Cancha
+          </h2>
+
+          <div class="max-w-2xl mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- Selección de cancha -->
+              <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Seleccionar Cancha</label
+                >
+                <select
+                  v-model="initData.court_id"
+                  class="w-full p-2 border rounded"
+                  :disabled="loadingCourts"
+                >
+                  <option v-if="loadingCourts" value="" disabled>
+                    Cargando canchas...
+                  </option>
+                  <option v-else-if="courts.length === 0" value="" disabled>
+                    No hay canchas disponibles
+                  </option>
+                  <option v-else value="" disabled>
+                    Seleccione una cancha
+                  </option>
+                  <option
+                    v-for="court in courts"
+                    :key="court.id"
+                    :value="court.id"
+                  >
+                    Cancha #[[ court.id ]] - [[ court.name || 'Sin nombre' ]]
+                  </option>
+                </select>
+              </div>
+
+              <!-- Equipo Azul -->
+              <div class="bg-blue-50 p-4 rounded border">
+                <h3 class="font-medium text-blue-800 mb-3">Equipo Azul</h3>
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                      >Nombre</label
+                    >
+                    <input
+                      v-model="initData.team_a.name"
+                      type="text"
+                      class="w-full p-2 border rounded"
+                      placeholder="Ej: Los Tigres"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                      >Jugadores</label
+                    >
+                    <input
+                      v-model="initData.team_a.players[0]"
+                      type="text"
+                      class="w-full p-2 border rounded mb-2"
+                      placeholder="Jugador 1"
+                    />
+                    <input
+                      v-model="initData.team_a.players[1]"
+                      type="text"
+                      class="w-full p-2 border rounded"
+                      placeholder="Jugador 2"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Equipo Rojo -->
+              <div class="bg-red-50 p-4 rounded border">
+                <h3 class="font-medium text-red-800 mb-3">Equipo Rojo</h3>
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                      >Nombre</label
+                    >
+                    <input
+                      v-model="initData.team_b.name"
+                      type="text"
+                      class="w-full p-2 border rounded"
+                      placeholder="Ej: La Sabana"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                      >Jugadores</label
+                    >
+                    <input
+                      v-model="initData.team_b.players[0]"
+                      type="text"
+                      class="w-full p-2 border rounded mb-2"
+                      placeholder="Jugador 1"
+                    />
+                    <input
+                      v-model="initData.team_b.players[1]"
+                      type="text"
+                      class="w-full p-2 border rounded"
+                      placeholder="Jugador 2"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              @click="initializeCourt"
+              class="mt-6 px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 w-full flex items-center justify-center"
+              :disabled="initializing"
+            >
+              [[ initializing ? 'Inicializando...' : 'Inicializar Cancha' ]]
+              <span v-if="initializing" class="loading-spinner ml-2"></span>
+            </button>
+          </div>
+        </div>
+      </main>
+
+      <!-- Notificación -->
+      <div
+        v-if="notification.show"
+        :class="['notification', notification.type === 'success' ? 'bg-emerald-500' : 'bg-red-500']"
+      >
+        [[ notification.message ]]
+        <button @click="notification.show = false" class="ml-2">✕</button>
+      </div>
+    </div>
+
+    <script>
+      const { createApp } = Vue;
+
+      createApp({
+        delimiters: ["[[", "]]"],
+        data() {
+          return {
+            activeTab: "reset",
+            courts: [],
+            loadingCourts: true,
+            selectedCourt: "",
+            resetting: false,
+            initializing: false,
+            initData: {
+              court_id: "",
+              team_a: {
+                color: "azul",
+                name: "",
+                players: ["", ""],
+              },
+              team_b: {
+                color: "rojo",
+                name: "",
+                players: ["", ""],
+              },
+            },
+            notification: {
+              show: false,
+              message: "",
+              type: "success",
+            },
+          };
+        },
+        async mounted() {
+          await this.fetchCourts();
+        },
+        methods: {
+          async fetchCourts() {
+            this.loadingCourts = true;
+            try {
+              const response = await axios.get("/game/get-courts");
+              this.courts = response.data;
+            } catch (error) {
+              this.showNotification(
+                "Error al cargar canchas: " + error.message,
+                "error"
+              );
+            } finally {
+              this.loadingCourts = false;
+            }
+          },
+          async resetCourt() {
+            if (!this.selectedCourt) return;
+
+            this.resetting = true;
+            try {
+              const response = await axios.post(
+                `/game/cancha/${this.selectedCourt}/reset?confirm=true`
+              );
+              this.showNotification("Cancha reseteada exitosamente", "success");
+              this.selectedCourt = "";
+            } catch (error) {
+              this.showNotification(
+                "Error al resetear cancha: " + error.message,
+                "error"
+              );
+            } finally {
+              this.resetting = false;
+            }
+          },
+          async initializeCourt() {
+            // Validación
+            if (!this.initData.court_id) {
+              this.showNotification("Selecciona una cancha", "error");
+              return;
+            }
+
+            if (!this.initData.team_a.name || !this.initData.team_b.name) {
+              this.showNotification(
+                "Ambos equipos deben tener un nombre",
+                "error"
+              );
+              return;
+            }
+
+            if (
+              !this.initData.team_a.players[0] ||
+              !this.initData.team_a.players[1] ||
+              !this.initData.team_b.players[0] ||
+              !this.initData.team_b.players[1]
+            ) {
+              this.showNotification(
+                "Cada equipo debe tener 2 jugadores",
+                "error"
+              );
+              return;
+            }
+
+            this.initializing = true;
+            try {
+              // Preparar datos para enviar
+              console.log(this.initData);
+              const payload = {
+                team_a: {
+                  color: this.initData.team_a.color,
+                  name: this.initData.team_a.name,
+                  players: this.initData.team_a.players.filter((p) => p),
+                },
+                team_b: {
+                  color: this.initData.team_b.color,
+                  name: this.initData.team_b.name,
+                  players: this.initData.team_b.players.filter((p) => p),
+                },
+              };
+
+              // Enviar al endpoint de inicialización
+              const response = await axios.post(
+                `/game/cancha/${this.initData.court_id}/initialize`,
+                payload
+              );
+
+              this.showNotification(
+                "Cancha inicializada exitosamente",
+                "success"
+              );
+
+              // Resetear formulario
+              this.initData = {
+                court_id: "",
+                team_a: { name: "", players: ["", ""], color: "azul" },
+                team_b: { name: "", players: ["", ""], color: "rojo" },
+              };
+            } catch (error) {
+              this.showNotification(
+                "Error al inicializar cancha: " + error.message,
+                "error"
+              );
+            } finally {
+              this.initializing = false;
+            }
+          },
+          showNotification(message, type = "success") {
+            this.notification = { show: true, message, type };
+            setTimeout(() => {
+              this.notification.show = false;
+            }, 3000);
+          },
+        },
+      }).mount("#admin-app");
+    </script>
+  </body>
+</html>
