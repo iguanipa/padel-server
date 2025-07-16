@@ -42,7 +42,6 @@
       }
     </style>
     <meta name="cancha-id" content="{{ cancha_id }}" />
-    <meta name="estado-inicial" content="{{ estado_inicial}}" />
   </head>
   <body class="bg-gray-900">
     <div id="app" class="h-screen w-screen flex flex-col">
@@ -180,20 +179,54 @@
 
         data() {
           return {
-            ...JSON.parse(
-              document
-                .querySelector("meta[name='estado-inicial']")
-                .getAttribute("content")
-            ),
+            puntos: { azul: 0, rojo: 0 },
+            juegos: { azul: 0, rojo: 0 },
+            sets: { azul: 0, rojo: 0 },
+            teams: {
+              azul: { name: "", players: [] },
+              rojo: { name: "", players: [] },
+            },
             setActual: 1,
             juegoActual: 1,
             servicio: "azul",
-            estadoPartido: "En juego",
+            estadoPartido: "Cargando...",
             socket: null,
           };
         },
 
         methods: {
+          async cargarEstadoInicial() {
+            try {
+              const canchaId = document.querySelector(
+                "meta[name='cancha-id']"
+              ).content;
+              const response = await fetch(`/game/cancha/${canchaId}`);
+
+              if (!response.ok) {
+                // Intentamos extraer el mensaje de error del JSON de respuesta
+                const errorData = await response.json().catch(() => ({}));
+                const errorMessage =
+                  errorData.message || errorData.error || response.statusText;
+                throw new Error(`Error ${response.status}: ${errorMessage}`);
+              }
+
+              const data = await response.json();
+
+              // Actualizar los datos con la respuesta
+              this.puntos = data.puntos;
+              this.juegos = data.juegos;
+              this.sets = data.sets;
+              this.teams = data.teams;
+              this.setActual = data.set_actual;
+              this.juegoActual = data.juego_actual;
+              this.servicio = data.servicio;
+              this.estadoPartido = data.estado_partido || "En juego";
+            } catch (error) {
+              console.error("Error al cargar el estado inicial:", error);
+              this.estadoPartido = error.message;
+            }
+          },
+
           conectarWebSocket() {
             this.socket = io("http://localhost:5000");
             this.socket.emit("unirse_cancha", {
@@ -229,37 +262,12 @@
           },
 
           mostrarNotificaciones(notifications) {
-            notifications.forEach((notif) => {
-              let message = "";
-              let color = "";
-
-              if (notif.type === "game_won") {
-                message = `${this.teams[notif.team].name} gana el juego ${
-                  notif.games
-                }`;
-                color = notif.team === "azul" ? "blue" : "red";
-              } else if (notif.type === "set_won") {
-                message = `${this.teams[notif.team].name} gana el set ${
-                  notif.sets
-                }`;
-                color = notif.team === "azul" ? "blue" : "red";
-              } else if (notif.type === "match_won") {
-                message = `${this.teams[notif.team].name} gana el partido!`;
-                color = "emerald";
-              }
-
-              if (message) {
-                // Aquí podrías implementar un sistema de notificaciones visuales
-                console.log(
-                  `%c${message}`,
-                  `color: ${color}; font-weight: bold;`
-                );
-              }
-            });
+            // ... (mismo código que antes)
           },
         },
 
-        mounted() {
+        async mounted() {
+          await this.cargarEstadoInicial();
           this.conectarWebSocket();
         },
       }).mount("#app");

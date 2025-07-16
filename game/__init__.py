@@ -11,3 +11,4 @@ game_bp = Blueprint(
 # Importar al final para evitar circularidad
 from . import game_routes
 from . import admin_routes
+from . import template_routes

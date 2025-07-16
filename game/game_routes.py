@@ -14,17 +14,11 @@ def marcador_por_cancha(cancha_id):
         # Obtener el estado actual (incluye equipos y jugadores)
         estado = manager._get_full_state()
             
-        return render_template(
-            "score.html",
-            cancha_id=cancha_id,
-            estado_inicial=json.dumps(estado)  # Enviamos todo el estado inicial
-        )
+        return jsonify(estado)
         
-    except ValueError as e:
-        # Si hay error (ej: cancha no existe), mostrar pantalla de error
-        print(f"Error cargando cancha {cancha_id}: {str(e)}")
     except Exception as e:
-        print(f"Error inesperado: {str(e)}")
+        # Manejo de errores (opcional)
+        return jsonify({"error": str(e)}), 500
 
 
 @game_bp.route("/cancha/<int:cancha_id>/punto", methods=["POST"])
